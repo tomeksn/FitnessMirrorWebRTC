@@ -1,0 +1,40 @@
+<resources>
+    <string name="app_name">FitnessMirror WebRTC</string>
+
+    <!-- Home Screen -->
+    <string name="home_title">Fitness Mirror</string>
+    <string name="home_subtitle">Paste a YouTube workout link to get started</string>
+    <string name="youtube_url_hint">https://www.youtube.com/watch?v=...</string>
+    <string name="start_workout_button">Start Workout</string>
+
+    <!-- Workout Screen -->
+    <string name="back_button">← Back</string>
+    <string name="info_text">Drag the camera window around the screen! Double-tap to switch camera.</string>
+    <string name="start_streaming">Start Streaming</string>
+    <string name="stop_streaming">Stop Streaming</string>
+    <string name="switch_camera">Switch Camera</string>
+    <string name="return_to_phone">📱 Return to Phone</string>
+
+    <!-- Connection Status -->
+    <string name="server_address_format">TV Address: %1$s</string>
+    <string name="connected_clients_format">Connected: %1$d client(s)</string>
+    <string name="status_streaming">Streaming Active</string>
+    <string name="status_ready">Ready to Stream</string>
+    <string name="status_error">Connection Error</string>
+
+    <!-- Permissions -->
+    <string name="camera_permission_title">Camera Permission Required</string>
+    <string name="camera_permission_message">This app needs camera access to provide mirror functionality during workouts.</string>
+    <string name="grant_permission">Grant Permission</string>
+
+    <!-- Playing on TV -->
+    <string name="playing_on_tv_title">Video Playing on TV</string>
+    <string name="playing_on_tv_subtitle">Your workout video is now playing on the connected TV with camera overlay</string>
+    <string name="tv_connection_address">Connected TV at:</string>
+
+    <!-- Errors -->
+    <string name="error_invalid_url">Please enter a valid YouTube URL</string>
+    <string name="error_empty_url">Please enter a YouTube URL</string>
+    <string name="error_camera_setup">Failed to setup camera</string>
+    <string name="error_server_start">Failed to start streaming server</string>
+</resources>
