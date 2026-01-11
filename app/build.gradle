@@ -75,7 +75,8 @@ dependencies {
     implementation 'com.pierfrancescosoffritti.androidyoutubeplayer:core:13.0.0'
 
     // WebRTC support for low-latency video streaming
-    implementation 'org.webrtc:google-webrtc:1.0.32006'
+    // Using Stream's wrapper - same API as Google WebRTC, but properly published to Maven
+    implementation 'io.getstream:stream-webrtc-android:1.1.1'
 
     // JSON parsing for WebRTC signaling messages
     implementation 'org.json:json:20231013'
