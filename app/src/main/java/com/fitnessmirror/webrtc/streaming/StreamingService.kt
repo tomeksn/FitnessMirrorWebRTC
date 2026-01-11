@@ -506,9 +506,26 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
         serviceCallback?.onFrameReady(jpegData)
     }
 
+    // Unified onError implementation for all interfaces (CameraCallback, StreamingCallback, WebRTCCallback)
     override fun onError(error: String) {
-        Log.e(TAG, "Background camera error: $error")
-        updateNotification("Camera error - $error")
+        Log.e(TAG, "Error occurred: $error")
+
+        // Determine error source and handle appropriately
+        when {
+            error.contains("camera", ignoreCase = true) -> {
+                Log.e(TAG, "Camera error: $error")
+                updateNotification("Camera error")
+            }
+            error.contains("webrtc", ignoreCase = true) || error.contains("peer", ignoreCase = true) -> {
+                Log.e(TAG, "WebRTC error: $error")
+                updateNotification("WebRTC error - using WebSocket fallback")
+                fallbackToWebSocket()
+            }
+            else -> {
+                Log.e(TAG, "Streaming error: $error")
+                updateNotification("Streaming error")
+            }
+        }
     }
 
     override fun onPreviewReady(preview: androidx.camera.core.Preview) {
@@ -627,12 +644,6 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
                 Log.d(TAG, "WebRTC state: $state")
             }
         }
-    }
-
-    override fun onError(error: String) {
-        Log.e(TAG, "WebRTC error: $error")
-        updateNotification("WebRTC error - using WebSocket fallback")
-        fallbackToWebSocket()
     }
 
     /**

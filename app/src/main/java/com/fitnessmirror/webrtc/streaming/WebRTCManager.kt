@@ -249,6 +249,10 @@ class WebRTCManager(
                     Log.d(TAG, "ICE connection state: $newState")
                 }
 
+                override fun onIceConnectionReceivingChange(receiving: Boolean) {
+                    Log.d(TAG, "ICE connection receiving change: $receiving")
+                }
+
                 override fun onIceGatheringChange(newState: IceGatheringState) {
                     Log.d(TAG, "ICE gathering state: $newState")
                 }

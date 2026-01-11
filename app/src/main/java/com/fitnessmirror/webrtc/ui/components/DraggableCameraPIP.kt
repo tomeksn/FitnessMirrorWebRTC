@@ -30,7 +30,7 @@ import kotlin.math.roundToInt
 
 @Composable
 fun DraggableCameraPIP(
-    cameraManager: com.fitnessmirror.app.camera.CameraManager?,  // Deprecated: Not used, kept for API compatibility
+    cameraManager: com.fitnessmirror.webrtc.camera.CameraManager?,  // Deprecated: Not used, kept for API compatibility
     modifier: Modifier = Modifier,
     initialWidth: Float = 120f,
     initialHeight: Float = 160f,
