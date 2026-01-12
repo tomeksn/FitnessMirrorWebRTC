@@ -123,17 +123,41 @@ class WebRTCManager(
      */
     fun injectFrame(image: ImageProxy) {
         try {
+            Log.d(TAG, "🔍 injectFrame called - width=${image.width}, height=${image.height}, format=${image.format}")
+
+            // Check API availability
+            Log.d(TAG, "VideoSource: $localVideoSource")
+            Log.d(TAG, "CapturerObserver accessible: ${try { localVideoSource?.capturerObserver != null } catch (e: Exception) { "ERROR: $e" }}")
+
+            // Try to detect available buffer classes
+            val availableBuffers = detectAvailableBufferClasses()
+            Log.d(TAG, "Available buffer classes: $availableBuffers")
+
             // Convert ImageProxy (YUV) to WebRTC VideoFrame
             val videoFrame = imageProxyToVideoFrame(image)
 
             if (videoFrame != null) {
+                Log.d(TAG, "✅ VideoFrame created successfully")
                 // Feed frame to video source
                 localVideoSource?.capturerObserver?.onFrameCaptured(videoFrame)
+                Log.d(TAG, "✅ Frame injected to capturerObserver")
                 videoFrame.release()
+            } else {
+                Log.e(TAG, "❌ VideoFrame creation failed - returned null")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to inject frame", e)
+            Log.e(TAG, "❌ Failed to inject frame", e)
+            e.printStackTrace()
         }
+    }
+
+    private fun detectAvailableBufferClasses(): String {
+        val classes = mutableListOf<String>()
+        try { JavaI420Buffer.allocate(1, 1); classes.add("JavaI420Buffer") } catch (e: Exception) { }
+        try { Class.forName("org.webrtc.I420Buffer"); classes.add("I420Buffer") } catch (e: Exception) { }
+        try { Class.forName("org.webrtc.NV21Buffer"); classes.add("NV21Buffer") } catch (e: Exception) { }
+        try { Class.forName("org.webrtc.NV12Buffer"); classes.add("NV12Buffer") } catch (e: Exception) { }
+        return if (classes.isEmpty()) "NONE FOUND" else classes.joinToString(", ")
     }
 
     /**
