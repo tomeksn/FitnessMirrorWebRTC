@@ -317,29 +317,32 @@ fun WorkoutScreen(
             }
         }
 
-        // Draggable Camera PIP Overlay (always on top)
-        DraggableCameraPIP(
-            cameraManager = cameraManager,
-            modifier = Modifier.fillMaxSize(),
-            initialX = if (isLandscape) {
-                // In landscape, position near the right edge
-                configuration.screenWidthDp.toFloat() - 140f
-            } else {
-                20f
-            },
-            initialY = if (isLandscape) {
-                20f // Top of screen in landscape
-            } else {
-                100f // Below header in portrait
-            },
-            initialWidth = if (isLandscape) 120f else 120f,
-            initialHeight = if (isLandscape) 90f else 160f, // Shorter in landscape
-            onDoubleTap = onSwitchCamera,
-            surfaceRecreationTrigger = surfaceRecreationTrigger,
-            isYouTubeOnTV = isYouTubeOnTV,  // Pass YouTube state for surface recreation strategy
-            isFrontCamera = isFrontCamera,  // Pass camera facing for GPU mirror transform
-            hasCameraPermission = hasCameraPermission  // Pass camera permission state
-        )
+        // Draggable Camera PIP Overlay (only when NOT streaming)
+        // When streaming, StreamingService has exclusive camera access
+        if (!isStreaming) {
+            DraggableCameraPIP(
+                cameraManager = cameraManager,
+                modifier = Modifier.fillMaxSize(),
+                initialX = if (isLandscape) {
+                    // In landscape, position near the right edge
+                    configuration.screenWidthDp.toFloat() - 140f
+                } else {
+                    20f
+                },
+                initialY = if (isLandscape) {
+                    20f // Top of screen in landscape
+                } else {
+                    100f // Below header in portrait
+                },
+                initialWidth = if (isLandscape) 120f else 120f,
+                initialHeight = if (isLandscape) 90f else 160f, // Shorter in landscape
+                onDoubleTap = onSwitchCamera,
+                surfaceRecreationTrigger = surfaceRecreationTrigger,
+                isYouTubeOnTV = isYouTubeOnTV,  // Pass YouTube state for surface recreation strategy
+                isFrontCamera = isFrontCamera,  // Pass camera facing for GPU mirror transform
+                hasCameraPermission = hasCameraPermission  // Pass camera permission state
+            )
+        }
     }
 }
 
