@@ -583,6 +583,12 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
         updateNotification("Client connected - streaming active")
         serviceCallback?.onStreamingStateChanged(isStreaming, hasConnectedClient, serverAddress)
         Log.d(TAG, "Background streaming client connected")
+
+        // Create WebRTC offer when client connects
+        webRTCManager?.let {
+            Log.d(TAG, "📡 Client connected - creating WebRTC offer")
+            it.createOffer()
+        }
     }
 
     override fun onClientDisconnected() {

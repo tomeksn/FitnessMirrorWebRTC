@@ -1029,7 +1029,7 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
                 // Handle ICE candidates
                 this.pc.onicecandidate = function(event) {
                     if (event.candidate) {
-                        console.log('📡 Sending ICE candidate');
+                        console.log('📡 Sending ICE candidate to server');
                         self.sendICECandidate(event.candidate);
                     }
                 };
@@ -1046,7 +1046,7 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
                     }
                 };
 
-                // Connect signaling WebSocket
+                // Connect signaling WebSocket and wait for offer from server
                 this.connectSignaling();
 
             } catch (e) {
@@ -1067,10 +1067,8 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
 
                 this.ws.onopen = function() {
                     console.log('✅ Signaling WebSocket connected');
-                    self.updateStatus('Negotiating WebRTC...', 'connecting');
-
-                    // Create offer
-                    self.createOffer();
+                    self.updateStatus('Waiting for WebRTC offer...', 'connecting');
+                    // Wait for offer from Android server
                 };
 
                 this.ws.onmessage = function(event) {
@@ -1083,9 +1081,23 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
                                 type: message.sdpType,
                                 sdp: message.sdp
                             });
-                            self.pc.setRemoteDescription(sdp);
+
+                            if (message.sdpType === 'offer') {
+                                // Received offer from Android - create answer
+                                console.log('📥 Received offer from server - creating answer');
+                                self.updateStatus('Negotiating WebRTC...', 'connecting');
+                                self.pc.setRemoteDescription(sdp).then(function() {
+                                    return self.createAnswer();
+                                }).catch(function(error) {
+                                    console.error('❌ Failed to process offer:', error);
+                                    self.fallbackToWebSocket();
+                                });
+                            } else {
+                                // Other SDP types (shouldn't happen in this flow)
+                                self.pc.setRemoteDescription(sdp);
+                            }
                         } else if (message.type === 'ICE') {
-                            console.log('📨 Received ICE candidate');
+                            console.log('📨 Received ICE candidate from server');
                             var candidate = new RTCIceCandidate({
                                 sdpMid: message.sdpMid,
                                 sdpMLineIndex: message.sdpMLineIndex,
@@ -1113,38 +1125,35 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
             }
         };
 
-        WebRTCReceiver.prototype.createOffer = function() {
+        WebRTCReceiver.prototype.createAnswer = function() {
             var self = this;
 
-            this.pc.createOffer({
-                offerToReceiveVideo: true,
-                offerToReceiveAudio: false
-            }).then(function(offer) {
-                console.log('📤 Created offer');
-                return self.pc.setLocalDescription(offer);
+            return this.pc.createAnswer().then(function(answer) {
+                console.log('📤 Created answer');
+                return self.pc.setLocalDescription(answer);
             }).then(function() {
-                console.log('📤 Sending offer to server');
-                return self.sendOffer(self.pc.localDescription);
+                console.log('📤 Sending answer to server');
+                return self.sendAnswer(self.pc.localDescription);
             }).catch(function(error) {
-                console.error('❌ Error creating offer:', error);
+                console.error('❌ Error creating answer:', error);
                 self.fallbackToWebSocket();
             });
         };
 
-        WebRTCReceiver.prototype.sendOffer = function(offer) {
-            return fetch('/webrtc-offer', {
+        WebRTCReceiver.prototype.sendAnswer = function(answer) {
+            return fetch('/webrtc-answer', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    type: offer.type,
-                    sdp: offer.sdp
+                    type: answer.type,
+                    sdp: answer.sdp
                 })
             }).then(function(response) {
                 return response.json();
             }).then(function(data) {
-                console.log('✅ Offer sent successfully');
+                console.log('✅ Answer sent successfully');
             }).catch(function(error) {
-                console.error('❌ Failed to send offer:', error);
+                console.error('❌ Failed to send answer:', error);
             });
         };
 
