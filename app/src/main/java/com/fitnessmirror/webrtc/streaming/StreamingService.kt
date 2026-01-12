@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
+import androidx.camera.core.ImageProxy
 import com.fitnessmirror.webrtc.MainActivity
 import com.fitnessmirror.webrtc.R
 import com.fitnessmirror.webrtc.camera.CameraManager
@@ -504,6 +505,19 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
 
         // Notify activity if connected
         serviceCallback?.onFrameReady(jpegData)
+    }
+
+    override fun onRawFrameReady(image: ImageProxy) {
+        // Don't process frames until camera is fully initialized
+        if (!isCameraReady) {
+            image.close()
+            return
+        }
+
+        // Feed frame to WebRTC if initialized
+        if (::webRTCManager.isInitialized) {
+            webRTCManager.injectFrame(image)
+        }
     }
 
     // Unified onError implementation for all interfaces (CameraCallback, StreamingCallback, WebRTCCallback)

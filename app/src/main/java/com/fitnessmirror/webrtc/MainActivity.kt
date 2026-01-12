@@ -27,6 +27,7 @@ import com.fitnessmirror.webrtc.camera.CameraManager
 import com.fitnessmirror.webrtc.camera.CameraMode
 import com.fitnessmirror.webrtc.streaming.StreamingService
 import com.fitnessmirror.webrtc.network.NetworkUtils
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 
 class MainActivity : ComponentActivity() {
@@ -259,6 +260,12 @@ class MainActivity : ComponentActivity() {
                     override fun onFrameReady(jpegData: ByteArray) {
                         // UI camera manager doesn't need to handle frames in PREVIEW_ONLY mode
                         // StreamingService handles JPEG processing when actually streaming to TV
+                    }
+
+                    override fun onRawFrameReady(image: ImageProxy) {
+                        // Preview camera doesn't need raw frames
+                        // Only streaming service uses this for WebRTC
+                        image.close()
                     }
 
                     override fun onError(error: String) {

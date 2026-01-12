@@ -43,7 +43,6 @@ class WebRTCManager(
     private var peerConnection: PeerConnection? = null
     private var videoTrack: VideoTrack? = null
     private var localVideoSource: VideoSource? = null
-    private var videoCapturer: CameraVideoCapturer? = null
 
     private var isFrontCamera = true
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
@@ -91,71 +90,88 @@ class WebRTCManager(
     }
 
     /**
-     * Initialize video source from camera
+     * Initialize video source for manual frame injection
+     * Camera frames will be provided by CameraManager
      */
     private fun initializeVideoSource() {
-        Log.d(TAG, "Initializing video source")
+        Log.d(TAG, "Initializing video source (without capturer - uses CameraManager)")
 
         try {
-            // Create video source
+            // Create video source WITHOUT capturer
+            // We'll feed frames manually from CameraManager
             localVideoSource = peerConnectionFactory?.createVideoSource(false)
-
-            // Create video capturer (front camera by default)
-            videoCapturer = createCameraCapturer(true)
-
-            if (videoCapturer == null) {
-                throw IllegalStateException("Failed to create camera capturer")
-            }
-
-            // Create surface texture helper
-            val surfaceTextureHelper = SurfaceTextureHelper.create(
-                "CaptureThread",
-                EglBase.create().eglBaseContext
-            )
-
-            // Initialize capturer
-            videoCapturer?.initialize(
-                surfaceTextureHelper,
-                context,
-                localVideoSource?.capturerObserver
-            )
-
-            // Start capturing
-            videoCapturer?.startCapture(VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS)
 
             // Create video track
             videoTrack = peerConnectionFactory?.createVideoTrack("video_track", localVideoSource)
             videoTrack?.setEnabled(true)
 
-            Log.d(TAG, "Video source initialized successfully")
+            Log.d(TAG, "Video source initialized successfully (manual frame injection mode)")
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize video source", e)
-            callback.onError("Camera initialization failed: ${e.message}")
+            callback.onError("Video source initialization failed: ${e.message}")
             throw e
         }
     }
 
     /**
-     * Create camera capturer for specified camera facing
+     * Inject video frame from CameraManager
+     * Called by StreamingService when new frame is available
+     *
+     * @param image ImageProxy from CameraX ImageAnalysis
      */
-    private fun createCameraCapturer(useFrontCamera: Boolean): CameraVideoCapturer? {
-        val enumerator = Camera2Enumerator(context)
-        val deviceNames = enumerator.deviceNames
+    fun injectFrame(image: ImageProxy) {
+        try {
+            // Convert ImageProxy (YUV) to WebRTC VideoFrame
+            val videoFrame = imageProxyToVideoFrame(image)
 
-        // Try to find the requested camera
-        for (deviceName in deviceNames) {
-            if (useFrontCamera && enumerator.isFrontFacing(deviceName)) {
-                Log.d(TAG, "Creating front camera capturer: $deviceName")
-                return enumerator.createCapturer(deviceName, null)
-            } else if (!useFrontCamera && enumerator.isBackFacing(deviceName)) {
-                Log.d(TAG, "Creating back camera capturer: $deviceName")
-                return enumerator.createCapturer(deviceName, null)
+            if (videoFrame != null) {
+                // Feed frame to video source
+                localVideoSource?.capturerObserver?.onFrameCaptured(videoFrame)
+                videoFrame.release()
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to inject frame", e)
         }
+    }
 
-        Log.e(TAG, "Failed to find camera: ${if (useFrontCamera) "front" else "back"}")
-        return null
+    /**
+     * Convert CameraX ImageProxy (YUV) to WebRTC VideoFrame
+     */
+    private fun imageProxyToVideoFrame(image: ImageProxy): VideoFrame? {
+        try {
+            // Get YUV planes from ImageProxy
+            val yPlane = image.planes[0]
+            val uPlane = image.planes[1]
+            val vPlane = image.planes[2]
+
+            val yBuffer = yPlane.buffer
+            val uBuffer = uPlane.buffer
+            val vBuffer = vPlane.buffer
+
+            // Create I420 buffer from YUV planes
+            val i420Buffer = JavaI420Buffer.allocate(image.width, image.height)
+
+            // Copy Y plane
+            yBuffer.rewind()
+            i420Buffer.dataY.put(yBuffer)
+
+            // Copy U plane
+            uBuffer.rewind()
+            i420Buffer.dataU.put(uBuffer)
+
+            // Copy V plane
+            vBuffer.rewind()
+            i420Buffer.dataV.put(vBuffer)
+
+            // Create VideoFrame with timestamp
+            val timestampNs = System.nanoTime()
+            return VideoFrame(i420Buffer, 0 /* rotation */, timestampNs)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to convert ImageProxy to VideoFrame", e)
+            return null
+        }
     }
 
     /**
@@ -326,53 +342,6 @@ class WebRTCManager(
         peerConnection?.addIceCandidate(candidate)
     }
 
-    /**
-     * Switch between front and back camera
-     */
-    fun switchCamera() {
-        Log.d(TAG, "Switching camera")
-
-        coroutineScope.launch {
-            try {
-                // Stop current capturer
-                videoCapturer?.stopCapture()
-                videoCapturer?.dispose()
-
-                // Toggle camera
-                isFrontCamera = !isFrontCamera
-
-                // Create new capturer
-                videoCapturer = createCameraCapturer(isFrontCamera)
-
-                if (videoCapturer == null) {
-                    Log.e(TAG, "Failed to create new camera capturer")
-                    callback.onError("Failed to switch camera")
-                    return@launch
-                }
-
-                // Reinitialize capturer
-                val surfaceTextureHelper = SurfaceTextureHelper.create(
-                    "CaptureThread",
-                    EglBase.create().eglBaseContext
-                )
-
-                videoCapturer?.initialize(
-                    surfaceTextureHelper,
-                    context,
-                    localVideoSource?.capturerObserver
-                )
-
-                // Start capturing
-                videoCapturer?.startCapture(VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS)
-
-                Log.d(TAG, "Camera switched successfully to ${if (isFrontCamera) "front" else "back"}")
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to switch camera", e)
-                callback.onError("Failed to switch camera: ${e.message}")
-            }
-        }
-    }
 
     /**
      * Check if front camera is currently active
@@ -386,11 +355,6 @@ class WebRTCManager(
         Log.d(TAG, "Closing WebRTC manager")
 
         try {
-            // Stop and dispose capturer
-            videoCapturer?.stopCapture()
-            videoCapturer?.dispose()
-            videoCapturer = null
-
             // Dispose video track
             videoTrack?.dispose()
             videoTrack = null

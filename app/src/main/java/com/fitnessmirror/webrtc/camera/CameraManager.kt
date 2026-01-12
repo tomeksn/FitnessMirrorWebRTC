@@ -119,6 +119,7 @@ class CameraManager(
 
     interface CameraCallback {
         fun onFrameReady(jpegData: ByteArray)
+        fun onRawFrameReady(image: ImageProxy)  // NEW: Raw YUV frames for WebRTC
         fun onError(error: String)
         fun onPreviewReady(preview: Preview)
         fun onPreviewChanged(preview: Preview)  // New callback for camera switching
@@ -290,18 +291,24 @@ class CameraManager(
         // Simple frame rate limiting like CastApp
         val frameInterval = if (isBackgroundMode) backgroundFrameInterval else FRAME_RATE_MS
         if (currentTime - lastFrameTime < frameInterval) {
+            image.close()  // Important: close unused frames
             return
         }
         lastFrameTime = currentTime
 
         try {
-            // TEST: Simplified pipeline - no buffering, direct send (match CastApp)
+            // Send raw frame to WebRTC (no conversion needed - YUV format)
+            callback?.onRawFrameReady(image)
+
+            // Convert to JPEG for WebSocket fallback
             val jpegData = convertImageToJpeg(image)
             jpegData?.let { data ->
                 frameCallback?.invoke(data)
             }
         } catch (exc: Exception) {
             Log.e(TAG, "Frame processing failed", exc)
+        } finally {
+            image.close()  // Always close image to prevent memory leaks
         }
     }
 
