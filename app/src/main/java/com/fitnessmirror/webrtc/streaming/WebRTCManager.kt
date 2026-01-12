@@ -162,32 +162,100 @@ class WebRTCManager(
 
     /**
      * Convert CameraX ImageProxy (YUV) to WebRTC VideoFrame
+     * Properly handles rowStride and pixelStride to avoid BufferOverflowException
      */
     private fun imageProxyToVideoFrame(image: ImageProxy): VideoFrame? {
         try {
-            // Get YUV planes from ImageProxy
+            val width = image.width
+            val height = image.height
+
             val yPlane = image.planes[0]
             val uPlane = image.planes[1]
             val vPlane = image.planes[2]
 
+            Log.d(TAG, "📊 Y plane: rowStride=${yPlane.rowStride}, pixelStride=${yPlane.pixelStride}, buffer=${yPlane.buffer.remaining()}")
+            Log.d(TAG, "📊 U plane: rowStride=${uPlane.rowStride}, pixelStride=${uPlane.pixelStride}, buffer=${uPlane.buffer.remaining()}")
+            Log.d(TAG, "📊 V plane: rowStride=${vPlane.rowStride}, pixelStride=${vPlane.pixelStride}, buffer=${vPlane.buffer.remaining()}")
+
+            // Create I420 buffer
+            val i420Buffer = JavaI420Buffer.allocate(width, height)
+
+            // Copy Y plane (handle rowStride - may have padding)
             val yBuffer = yPlane.buffer
+            val yRowStride = yPlane.rowStride
+            val yData = i420Buffer.dataY
+
+            yData.position(0)
+            if (yRowStride == width) {
+                // No padding, can copy directly
+                yBuffer.position(0)
+                yData.put(yBuffer)
+            } else {
+                // Has padding, copy line by line
+                for (row in 0 until height) {
+                    yBuffer.position(row * yRowStride)
+                    yBuffer.limit(row * yRowStride + width)
+                    yData.put(yBuffer)
+                }
+            }
+
+            // Copy U plane (handle rowStride and pixelStride)
             val uBuffer = uPlane.buffer
+            val uRowStride = uPlane.rowStride
+            val uPixelStride = uPlane.pixelStride
+            val chromaWidth = width / 2
+            val chromaHeight = height / 2
+            val uData = i420Buffer.dataU
+
+            uData.position(0)
+            if (uPixelStride == 1 && uRowStride == chromaWidth) {
+                // Planar format without padding
+                uBuffer.position(0)
+                uData.put(uBuffer)
+            } else if (uPixelStride == 1) {
+                // Planar format with padding
+                for (row in 0 until chromaHeight) {
+                    uBuffer.position(row * uRowStride)
+                    uBuffer.limit(row * uRowStride + chromaWidth)
+                    uData.put(uBuffer)
+                }
+            } else {
+                // Semi-planar or interleaved format
+                for (row in 0 until chromaHeight) {
+                    for (col in 0 until chromaWidth) {
+                        val pos = row * uRowStride + col * uPixelStride
+                        uData.put(uBuffer.get(pos))
+                    }
+                }
+            }
+
+            // Copy V plane (handle rowStride and pixelStride)
             val vBuffer = vPlane.buffer
+            val vRowStride = vPlane.rowStride
+            val vPixelStride = vPlane.pixelStride
+            val vData = i420Buffer.dataV
 
-            // Create I420 buffer from YUV planes
-            val i420Buffer = JavaI420Buffer.allocate(image.width, image.height)
-
-            // Copy Y plane
-            yBuffer.rewind()
-            i420Buffer.dataY.put(yBuffer)
-
-            // Copy U plane
-            uBuffer.rewind()
-            i420Buffer.dataU.put(uBuffer)
-
-            // Copy V plane
-            vBuffer.rewind()
-            i420Buffer.dataV.put(vBuffer)
+            vData.position(0)
+            if (vPixelStride == 1 && vRowStride == chromaWidth) {
+                // Planar format without padding
+                vBuffer.position(0)
+                vData.put(vBuffer)
+            } else if (vPixelStride == 1) {
+                // Planar format with padding
+                for (row in 0 until chromaHeight) {
+                    vBuffer.position(row * vRowStride)
+                    vBuffer.limit(row * vRowStride + chromaWidth)
+                    vData.put(vBuffer)
+                }
+            } else {
+                // Semi-planar or interleaved format
+                for (row in 0 until chromaHeight) {
+                    for (col in 0 until chromaWidth) {
+                        val pos = row * vRowStride + col * vPixelStride
+                        vData.put(vBuffer.get(pos))
+                    }
+                }
+            }
 
             // Create VideoFrame with timestamp
             val timestampNs = System.nanoTime()
