@@ -2,6 +2,7 @@ package com.fitnessmirror.webrtc.streaming
 
 import android.content.Context
 import android.util.Log
+import androidx.camera.core.ImageProxy
 import org.webrtc.*
 import org.webrtc.PeerConnection.*
 import kotlinx.coroutines.CoroutineScope

@@ -515,9 +515,7 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
         }
 
         // Feed frame to WebRTC if initialized
-        if (::webRTCManager.isInitialized) {
-            webRTCManager.injectFrame(image)
-        }
+        webRTCManager?.injectFrame(image)
     }
 
     // Unified onError implementation for all interfaces (CameraCallback, StreamingCallback, WebRTCCallback)
