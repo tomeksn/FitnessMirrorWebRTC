@@ -352,11 +352,14 @@ class MainActivity : ComponentActivity() {
 
     private fun transferYouTubeToTV() {
         currentYouTubeUrl?.let { url ->
-            val videoId = com.fitnessmirror.app.utils.YouTubeUrlValidator.extractVideoId(url)
+            val videoId = com.fitnessmirror.webrtc.utils.YouTubeUrlValidator.extractVideoId(url)
             if (videoId != null && hasConnectedClient && isServiceBound) {
                 try {
                     // Pass current video time for synchronization
-                    streamingService?.transferYouTubeToTV(videoId, currentVideoTime)
+                    val service = streamingService
+                    if (service != null) {
+                        service.transferYouTubeToTV(videoId, currentVideoTime)
+                    }
                     isYouTubeOnTV = true
                     Log.d(TAG, "YouTube transferred to TV via streaming service: $videoId at ${currentVideoTime}s")
                 } catch (e: Exception) {

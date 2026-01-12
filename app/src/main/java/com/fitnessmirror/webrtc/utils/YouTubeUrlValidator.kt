@@ -82,7 +82,7 @@ object YouTubeUrlValidator {
         val videoId = extractVideoId(url)
         return if (videoId != null) {
             // Use nocookie domain for better embed compatibility
-            "https://www.youtube-nocookie.com/embed/$videoId?enablejsapi=1&rel=0&showinfo=0&controls=1&autoplay=0&mute=0&loop=0&playsinline=1&origin=android-app://com.fitnessmirror.app&widget_referrer=android-app://com.fitnessmirror.app"
+            "https://www.youtube-nocookie.com/embed/$videoId?enablejsapi=1&rel=0&showinfo=0&controls=1&autoplay=0&mute=0&loop=0&playsinline=1&origin=android-app://com.fitnessmirror.webrtc&widget_referrer=android-app://com.fitnessmirror.webrtc"
         } else {
             null
         }

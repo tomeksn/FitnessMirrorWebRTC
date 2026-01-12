@@ -34,9 +34,9 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
         private const val SERVER_PORT = 8080
 
         // Service actions
-        const val ACTION_START_STREAMING = "com.fitnessmirror.app.START_STREAMING"
-        const val ACTION_STOP_STREAMING = "com.fitnessmirror.app.STOP_STREAMING"
-        const val ACTION_SWITCH_CAMERA = "com.fitnessmirror.app.SWITCH_CAMERA"
+        const val ACTION_START_STREAMING = "com.fitnessmirror.webrtc.START_STREAMING"
+        const val ACTION_STOP_STREAMING = "com.fitnessmirror.webrtc.STOP_STREAMING"
+        const val ACTION_SWITCH_CAMERA = "com.fitnessmirror.webrtc.SWITCH_CAMERA"
 
         // Static service instance tracking
         @Volatile
