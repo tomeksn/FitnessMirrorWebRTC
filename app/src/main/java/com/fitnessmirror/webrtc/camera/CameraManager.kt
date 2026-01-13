@@ -413,13 +413,16 @@ class CameraManager(
     fun startStreaming() {
         Log.d(TAG, "Starting camera streaming")
 
+        // CRITICAL FIX: Set isStreaming BEFORE setupCamera()
+        // Analyzer checks this flag immediately when frames arrive
+        isStreaming = true
+
         // Switch to STREAMING mode if not already
         if (currentMode != CameraMode.STREAMING) {
             Log.d(TAG, "Switching from ${currentMode.name} to STREAMING mode")
             setupCamera(CameraMode.STREAMING)
         }
 
-        isStreaming = true
         // TEST: Disabled buffering/monitoring systems to reduce latency
         // startSurfaceConflictMonitoring()
         // startFrameBuffering()

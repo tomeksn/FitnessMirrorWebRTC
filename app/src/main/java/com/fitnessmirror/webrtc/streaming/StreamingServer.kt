@@ -998,6 +998,12 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
             this.ws = null;  // WebSocket for signaling only
             this.isFrontCamera = true;
 
+            // Latency tracking variables
+            this.lastFrameTimestamp = 0;
+            this.latencySamples = [];
+            this.maxLatencySamples = 10;
+            this.frameCount = 0;
+
             // Apply mirror effect for front camera
             if (this.isFrontCamera) {
                 this.video.classList.add('mirror');
@@ -1023,6 +1029,10 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
                 this.pc.ontrack = function(event) {
                     console.log('✅ Received remote video track');
                     self.video.srcObject = event.streams[0];
+
+                    // Start frame counter and latency monitoring
+                    self.startLatencyMonitoring();
+
                     self.updateStatus('WebRTC Connected', 'connected');
                 };
 
@@ -1052,6 +1062,45 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
             } catch (e) {
                 console.error('❌ Failed to create RTCPeerConnection:', e);
                 this.fallbackToWebSocket();
+            }
+        };
+
+        WebRTCReceiver.prototype.startLatencyMonitoring = function() {
+            var self = this;
+
+            // Monitor video frame timing via requestVideoFrameCallback
+            if (self.video.requestVideoFrameCallback) {
+                var measureFrame = function(now, metadata) {
+                    self.frameCount++;
+
+                    // Estimate latency using presentation timestamp
+                    if (metadata && metadata.presentationTime) {
+                        var latency = performance.now() - metadata.presentationTime;
+
+                        if (latency > 0 && latency < 5000) {
+                            self.latencySamples.push(latency);
+                            if (self.latencySamples.length > self.maxLatencySamples) {
+                                self.latencySamples.shift();
+                            }
+                        }
+                    }
+
+                    // Update status with average latency
+                    if (self.latencySamples.length > 0) {
+                        var sum = 0;
+                        for (var i = 0; i < self.latencySamples.length; i++) {
+                            sum += self.latencySamples[i];
+                        }
+                        var avgLatency = Math.round(sum / self.latencySamples.length);
+                        self.updateStatus('WebRTC - ' + self.frameCount + ' frames | Latency: ~' + avgLatency + 'ms', 'connected');
+                    }
+
+                    self.video.requestVideoFrameCallback(measureFrame);
+                };
+
+                self.video.requestVideoFrameCallback(measureFrame);
+            } else {
+                console.warn('⚠️ requestVideoFrameCallback not supported - latency monitoring disabled');
             }
         };
 
@@ -1104,6 +1153,14 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
                                 candidate: message.candidate
                             });
                             self.pc.addIceCandidate(candidate);
+                        } else if (message.type === 'VIDEO_URL') {
+                            // NEW: Handle YouTube video loading
+                            console.log('📺 Received YouTube video: ' + message.videoId);
+                            self.loadYouTubeVideo(message.videoId, message.currentTime || 0);
+                        } else if (message.type === 'VIDEO_CONTROL') {
+                            // NEW: Handle video control commands
+                            console.log('🎮 Received video control: ' + message.command);
+                            self.handleVideoControl(message.command, message.value);
                         }
                     } catch (e) {
                         console.log('Non-JSON message, ignoring');
@@ -1167,6 +1224,58 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
                     candidate: candidate.candidate
                 })
             });
+        };
+
+        WebRTCReceiver.prototype.loadYouTubeVideo = function(videoId, startTime) {
+            console.log('🎥 Loading YouTube video:', videoId, 'at', startTime, 's');
+
+            var welcomeScreen = document.getElementById('welcome-screen');
+            var youtubeContainer = document.getElementById('youtube-container');
+            var youtubePlayer = document.getElementById('youtube-player');
+
+            // Hide welcome screen and show YouTube player
+            welcomeScreen.classList.add('hidden');
+            youtubeContainer.classList.remove('hidden');
+
+            // Create YouTube embed URL with parameters for TV compatibility
+            var embedUrl = 'https://www.youtube-nocookie.com/embed/' + videoId +
+                          '?autoplay=1&controls=1&rel=0&showinfo=0&iv_load_policy=3&modestbranding=1' +
+                          '&playsinline=1&start=' + Math.floor(startTime) +
+                          '&enablejsapi=1&origin=' + encodeURIComponent(window.location.origin);
+
+            youtubePlayer.src = embedUrl;
+
+            console.log('✅ YouTube video loaded successfully');
+        };
+
+        WebRTCReceiver.prototype.handleVideoControl = function(command, value) {
+            console.log('🎮 Video control:', command, value);
+
+            var welcomeScreen = document.getElementById('welcome-screen');
+            var youtubeContainer = document.getElementById('youtube-container');
+            var youtubePlayer = document.getElementById('youtube-player');
+
+            switch (command) {
+                case 'play':
+                    console.log('▶️ Play command received');
+                    break;
+                case 'pause':
+                    console.log('⏸️ Pause command received');
+                    break;
+                case 'seek':
+                    console.log('⏩ Seek to:', value, 's');
+                    break;
+                case 'stop':
+                    console.log('⏹️ Stop command received - returning to welcome screen');
+                    // Hide YouTube player and show welcome screen
+                    youtubeContainer.classList.add('hidden');
+                    welcomeScreen.classList.remove('hidden');
+                    // Clear the iframe src to stop playback
+                    youtubePlayer.src = '';
+                    break;
+                default:
+                    console.log('Unknown video control:', command);
+            }
         };
 
         WebRTCReceiver.prototype.updateStatus = function(text, className) {
