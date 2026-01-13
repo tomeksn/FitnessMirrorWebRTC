@@ -417,11 +417,15 @@ class CameraManager(
         // Analyzer checks this flag immediately when frames arrive
         isStreaming = true
 
-        // Switch to STREAMING mode if not already
+        // Always setup camera to ensure analyzer is registered
+        // Even if already in STREAMING mode, we need to re-bind to register analyzer
         if (currentMode != CameraMode.STREAMING) {
             Log.d(TAG, "Switching from ${currentMode.name} to STREAMING mode")
-            setupCamera(CameraMode.STREAMING)
+        } else {
+            Log.d(TAG, "Re-initializing camera in STREAMING mode to register analyzer")
         }
+
+        setupCamera(CameraMode.STREAMING)  // Always call to ensure analyzer is registered
 
         // TEST: Disabled buffering/monitoring systems to reduce latency
         // startSurfaceConflictMonitoring()
