@@ -87,7 +87,7 @@ class CameraManager(
     private var cameraExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var streamingScope = CoroutineScope(Dispatchers.Default + Job())
 
-    private var isStreaming = false
+    @Volatile private var isStreaming = false
     private var currentCameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA  // Match NativeCameraView default for consistent behavior
 
     // Current camera mode for performance optimization
