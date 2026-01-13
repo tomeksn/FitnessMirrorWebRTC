@@ -85,6 +85,7 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
     private var hasConnectedClient = false
     private var serverAddress: String? = null
     private var isCameraReady = false  // FIX #3/#4: Track camera initialization
+    private var hasPendingWebRTCOffer = false  // Track deferred WebRTC offer creation
 
     // Background streaming wake lock
     private var wakeLock: PowerManager.WakeLock? = null
@@ -571,6 +572,16 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
             serviceCallback?.onStreamingStateChanged(isStreaming, hasConnectedClient, serverAddress)
 
             Log.d(TAG, "✅ Full stack ready: Camera → Server → Ready for TV")
+
+            // NEW: If client already connected, create WebRTC offer now
+            if (hasPendingWebRTCOffer && hasConnectedClient) {
+                webRTCManager?.let {
+                    Log.d(TAG, "📡 Camera ready & client waiting - creating WebRTC offer now")
+                    it.createOffer()
+                    hasPendingWebRTCOffer = false
+                }
+            }
+
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start server after camera ready", e)
             stopSelf()
@@ -584,10 +595,17 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
         serviceCallback?.onStreamingStateChanged(isStreaming, hasConnectedClient, serverAddress)
         Log.d(TAG, "Background streaming client connected")
 
-        // Create WebRTC offer when client connects
-        webRTCManager?.let {
-            Log.d(TAG, "📡 Client connected - creating WebRTC offer")
-            it.createOffer()
+        // Create WebRTC offer only if camera is ready
+        if (isCameraReady) {
+            webRTCManager?.let {
+                Log.d(TAG, "📡 Client connected & camera ready - creating WebRTC offer immediately")
+                it.createOffer()
+            }
+        } else {
+            // Camera not ready yet - defer offer creation
+            hasPendingWebRTCOffer = true
+            Log.d(TAG, "📡 Client connected but camera not ready - offer deferred")
+            updateNotification("Client connected - waiting for camera...")
         }
     }
 
