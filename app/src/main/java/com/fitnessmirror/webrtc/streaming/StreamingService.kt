@@ -21,6 +21,7 @@ import com.fitnessmirror.webrtc.MainActivity
 import com.fitnessmirror.webrtc.R
 import com.fitnessmirror.webrtc.camera.CameraManager
 import com.fitnessmirror.webrtc.camera.CameraMode
+import com.fitnessmirror.webrtc.network.DiscoveryBroadcaster
 import com.fitnessmirror.webrtc.network.NetworkUtils
 import org.webrtc.IceCandidate
 import org.webrtc.PeerConnection
@@ -79,6 +80,7 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
     private var notificationManager: NotificationManager? = null
     private var webRTCManager: WebRTCManager? = null  // WebRTC peer connection manager
     private var useWebRTC: Boolean = true  // Try WebRTC first, fallback to WebSocket if fails
+    private var discoveryBroadcaster: DiscoveryBroadcaster? = null  // UDP broadcast for TV discovery
 
     // Streaming state
     private var isStreaming = false
@@ -459,6 +461,11 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
         try {
             Log.d(TAG, "Performing forced cleanup of streaming components")
 
+            // Stop discovery broadcast
+            discoveryBroadcaster?.stop()
+            discoveryBroadcaster = null
+            Log.d(TAG, "Discovery broadcast stopped during cleanup")
+
             // Stop streaming server first to release port
             if (::streamingServer.isInitialized) {
                 streamingServer.stopServer()
@@ -565,13 +572,18 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
             // Now start the server (camera is ready for frames)
             streamingServer.startServer()
 
+            // Start UDP broadcast for TV discovery
+            discoveryBroadcaster = DiscoveryBroadcaster(SERVER_PORT)
+            discoveryBroadcaster?.start(Build.MODEL)
+            Log.d(TAG, "📡 Discovery broadcast started for TV auto-discovery")
+
             // Update notification
             updateNotification("Streaming active - $serverAddress")
 
             // Notify UI with complete state
             serviceCallback?.onStreamingStateChanged(isStreaming, hasConnectedClient, serverAddress)
 
-            Log.d(TAG, "✅ Full stack ready: Camera → Server → Ready for TV")
+            Log.d(TAG, "✅ Full stack ready: Camera → Server → Discovery → Ready for TV")
 
             // NEW: If client already connected, create WebRTC offer now
             if (hasPendingWebRTCOffer && hasConnectedClient) {
