@@ -573,7 +573,7 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
             streamingServer.startServer()
 
             // Start UDP broadcast for TV discovery
-            discoveryBroadcaster = DiscoveryBroadcaster(SERVER_PORT)
+            discoveryBroadcaster = DiscoveryBroadcaster(this, SERVER_PORT)
             discoveryBroadcaster?.start(Build.MODEL)
             Log.d(TAG, "📡 Discovery broadcast started for TV auto-discovery")
 

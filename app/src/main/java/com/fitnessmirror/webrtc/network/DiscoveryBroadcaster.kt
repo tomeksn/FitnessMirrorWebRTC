@@ -1,5 +1,6 @@
 package com.fitnessmirror.webrtc.network
 
+import android.content.Context
 import android.os.Build
 import android.util.Log
 import org.json.JSONObject
@@ -12,7 +13,10 @@ import kotlin.concurrent.thread
  * Broadcasts presence on the local network for FitnessMirrorTV discovery.
  * Sends UDP broadcast packets every 2 seconds on port 8081.
  */
-class DiscoveryBroadcaster(private val serverPort: Int = 8080) {
+class DiscoveryBroadcaster(
+    private val context: Context,
+    private val serverPort: Int = 8080
+) {
 
     companion object {
         private const val TAG = "DiscoveryBroadcaster"
@@ -43,7 +47,7 @@ class DiscoveryBroadcaster(private val serverPort: Int = 8080) {
                     reuseAddress = true
                 }
 
-                val localIp = NetworkUtils.getLocalIpAddress()
+                val localIp = NetworkUtils.getLocalIpAddress(context)
                 if (localIp == null) {
                     Log.e(TAG, "Cannot get local IP address")
                     return@thread
