@@ -976,6 +976,50 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
     </div>
 
     <script>
+        // Helper function to filter VP8 codec from SDP
+        // Forces H.264 which has better hardware support on TVs
+        function filterVp8FromSdp(sdp) {
+            var lines = sdp.split('\r\n');
+            var vp8PayloadType = null;
+
+            // Find VP8 payload type
+            for (var i = 0; i < lines.length; i++) {
+                var match = lines[i].match(/a=rtpmap:(\d+) VP8\/90000/);
+                if (match) {
+                    vp8PayloadType = match[1];
+                    console.log('Found VP8 payload type to filter: ' + vp8PayloadType);
+                    break;
+                }
+            }
+
+            if (!vp8PayloadType) {
+                console.log('No VP8 codec found in SDP, returning unchanged');
+                return sdp;  // No VP8 found, return unchanged
+            }
+
+            // Filter VP8 lines
+            var filteredLines = [];
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                var skipLine = (
+                    line.indexOf('a=rtpmap:' + vp8PayloadType + ' ') !== -1 ||
+                    line.indexOf('a=rtcp-fb:' + vp8PayloadType + ' ') !== -1 ||
+                    line.indexOf('a=fmtp:' + vp8PayloadType + ' ') !== -1
+                );
+
+                if (!skipLine) {
+                    if (line.indexOf('m=video') === 0) {
+                        // Remove VP8 from m= line
+                        line = line.replace(' ' + vp8PayloadType, '');
+                    }
+                    filteredLines.push(line);
+                }
+            }
+
+            console.log('SDP filtered - VP8 codec removed, forcing H.264');
+            return filteredLines.join('\r\n');
+        }
+
         // WebRTC Receiver for low-latency streaming
         function WebRTCReceiver() {
             console.log('🎥 Initializing WebRTC receiver...');
@@ -1126,15 +1170,18 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
 
                         if (message.type === 'SDP') {
                             console.log('📨 Received SDP: ' + message.sdpType);
+
+                            // Filter VP8 from SDP to force H.264 for better TV compatibility
+                            var filteredSdpString = filterVp8FromSdp(message.sdp);
                             var sdp = new RTCSessionDescription({
                                 type: message.sdpType,
-                                sdp: message.sdp
+                                sdp: filteredSdpString
                             });
 
                             if (message.sdpType === 'offer') {
                                 // Received offer from Android - create answer
-                                console.log('📥 Received offer from server - creating answer');
-                                self.updateStatus('Negotiating WebRTC...', 'connecting');
+                                console.log('📥 Received offer from server - creating answer (VP8 filtered)');
+                                self.updateStatus('Negotiating WebRTC (H.264)...', 'connecting');
                                 self.pc.setRemoteDescription(sdp).then(function() {
                                     return self.createAnswer();
                                 }).catch(function(error) {

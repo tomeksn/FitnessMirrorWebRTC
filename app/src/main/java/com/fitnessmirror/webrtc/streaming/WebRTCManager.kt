@@ -91,6 +91,55 @@ class WebRTCManager(
     }
 
     /**
+     * Filter VP8 codec from SDP to force H.264 usage
+     * H.264 has better hardware support on TVs
+     */
+    private fun filterVp8FromSdp(sdp: String): String {
+        val lines = sdp.split("\r\n").toMutableList()
+        val filteredLines = mutableListOf<String>()
+        var vp8PayloadType: String? = null
+
+        // First pass: find VP8 payload type
+        for (line in lines) {
+            if (line.contains("a=rtpmap:") && line.contains("VP8/90000")) {
+                // Extract payload type (e.g., "a=rtpmap:96 VP8/90000" -> "96")
+                val match = Regex("a=rtpmap:(\\d+) VP8").find(line)
+                vp8PayloadType = match?.groupValues?.get(1)
+                Log.d(TAG, "Found VP8 payload type: $vp8PayloadType")
+                break
+            }
+        }
+
+        if (vp8PayloadType == null) {
+            Log.d(TAG, "No VP8 codec found in SDP, returning unchanged")
+            return sdp
+        }
+
+        // Second pass: filter out VP8 lines
+        for (line in lines) {
+            val skipLine = (
+                line.contains("a=rtpmap:$vp8PayloadType ") ||
+                line.contains("a=rtcp-fb:$vp8PayloadType ") ||
+                line.contains("a=fmtp:$vp8PayloadType ")
+            )
+
+            if (!skipLine) {
+                // Also remove VP8 from m= line payload list
+                if (line.startsWith("m=video") && vp8PayloadType != null) {
+                    val filtered = line.replace(" $vp8PayloadType", "")
+                    filteredLines.add(filtered)
+                } else {
+                    filteredLines.add(line)
+                }
+            }
+        }
+
+        val result = filteredLines.joinToString("\r\n")
+        Log.d(TAG, "SDP filtered - removed VP8 codec, forcing H.264")
+        return result
+    }
+
+    /**
      * Initialize video source for manual frame injection
      * Camera frames will be provided by CameraManager
      */
@@ -290,10 +339,16 @@ class WebRTCManager(
                 peerConnection?.createOffer(object : SdpObserver {
                     override fun onCreateSuccess(sdp: SessionDescription) {
                         Log.d(TAG, "Offer created successfully")
+
+                        // Filter VP8 from SDP to force H.264 for better TV compatibility
+                        val filteredSdpString = filterVp8FromSdp(sdp.description)
+                        val filteredSdp = SessionDescription(sdp.type, filteredSdpString)
+                        Log.d(TAG, "SDP filtered to prefer H.264 over VP8")
+
                         peerConnection?.setLocalDescription(object : SdpObserver {
                             override fun onSetSuccess() {
                                 Log.d(TAG, "Local description set successfully")
-                                callback.onLocalDescription(sdp)
+                                callback.onLocalDescription(filteredSdp)  // Send filtered SDP
                             }
 
                             override fun onSetFailure(error: String) {
@@ -303,7 +358,7 @@ class WebRTCManager(
 
                             override fun onCreateSuccess(p0: SessionDescription?) {}
                             override fun onCreateFailure(p0: String?) {}
-                        }, sdp)
+                        }, filteredSdp)  // Use filtered SDP
                     }
 
                     override fun onSetSuccess() {}
