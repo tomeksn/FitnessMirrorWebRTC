@@ -1874,8 +1874,49 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
         }
 
         override fun onMessage(message: NanoWSD.WebSocketFrame) {
-            // We don't expect messages from client in this implementation
-            Log.d(TAG, "Received message from client: ${message.textPayload}")
+            val text = message.textPayload
+            Log.d(TAG, "Received WebSocket message from TV: $text")
+
+            try {
+                val json = org.json.JSONObject(text)
+                val type = json.optString("type", "")
+
+                when (type) {
+                    "SDP" -> {
+                        val sdpType = json.getString("sdpType")
+                        val sdp = json.getString("sdp")
+                        Log.d(TAG, "Received SDP from TV: $sdpType")
+
+                        if (sdpType == "answer") {
+                            val sessionDescription = org.webrtc.SessionDescription(
+                                org.webrtc.SessionDescription.Type.ANSWER,
+                                sdp
+                            )
+                            server.callback.onWebRTCAnswer(sessionDescription)
+                        }
+                    }
+
+                    "ICE" -> {
+                        val sdpMid = json.getString("sdpMid")
+                        val sdpMLineIndex = json.getInt("sdpMLineIndex")
+                        val candidate = json.getString("candidate")
+                        Log.d(TAG, "Received ICE candidate from TV")
+
+                        val iceCandidate = org.webrtc.IceCandidate(
+                            sdpMid,
+                            sdpMLineIndex,
+                            candidate
+                        )
+                        server.callback.onWebRTCIceCandidate(iceCandidate)
+                    }
+
+                    else -> {
+                        Log.w(TAG, "Unknown WebSocket message type: $type")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error parsing WebSocket message from TV", e)
+            }
         }
 
         override fun onPong(pong: NanoWSD.WebSocketFrame) {
