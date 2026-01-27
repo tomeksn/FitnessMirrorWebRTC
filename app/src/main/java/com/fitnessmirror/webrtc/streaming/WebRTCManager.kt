@@ -340,15 +340,17 @@ class WebRTCManager(
                     override fun onCreateSuccess(sdp: SessionDescription) {
                         Log.d(TAG, "Offer created successfully")
 
-                        // Filter VP8 from SDP to force H.264 for better TV compatibility
+                        // Filter VP8 from SDP - only for sending to TV, not for local description
                         val filteredSdpString = filterVp8FromSdp(sdp.description)
                         val filteredSdp = SessionDescription(sdp.type, filteredSdpString)
-                        Log.d(TAG, "SDP filtered to prefer H.264 over VP8")
+                        Log.d(TAG, "SDP filtered to prefer H.264 over VP8 (for TV)")
 
+                        // Set ORIGINAL SDP as local description (WebRTC needs all available codecs)
                         peerConnection?.setLocalDescription(object : SdpObserver {
                             override fun onSetSuccess() {
                                 Log.d(TAG, "Local description set successfully")
-                                callback.onLocalDescription(filteredSdp)  // Send filtered SDP
+                                // Send FILTERED SDP to TV (without VP8)
+                                callback.onLocalDescription(filteredSdp)
                             }
 
                             override fun onSetFailure(error: String) {
@@ -358,7 +360,7 @@ class WebRTCManager(
 
                             override fun onCreateSuccess(p0: SessionDescription?) {}
                             override fun onCreateFailure(p0: String?) {}
-                        }, filteredSdp)  // Use filtered SDP
+                        }, sdp)  // Use ORIGINAL SDP for local description
                     }
 
                     override fun onSetSuccess() {}
