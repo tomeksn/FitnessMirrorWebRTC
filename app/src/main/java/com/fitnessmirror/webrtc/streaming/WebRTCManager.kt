@@ -386,9 +386,22 @@ class WebRTCManager(
     private fun createPeerConnection() {
         Log.d(TAG, "Creating peer connection")
 
-        // ICE servers configuration (using Google's public STUN server)
+        // ICE servers configuration (STUN + TURN for relay when direct connection fails)
         val iceServers = listOf(
-            IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
+            IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+            // TURN server for relay when direct connection fails
+            IceServer.builder("turn:openrelay.metered.ca:80")
+                .setUsername("openrelayproject")
+                .setPassword("openrelayproject")
+                .createIceServer(),
+            IceServer.builder("turn:openrelay.metered.ca:443")
+                .setUsername("openrelayproject")
+                .setPassword("openrelayproject")
+                .createIceServer(),
+            IceServer.builder("turn:openrelay.metered.ca:443?transport=tcp")
+                .setUsername("openrelayproject")
+                .setPassword("openrelayproject")
+                .createIceServer()
         )
 
         // RTCConfiguration
