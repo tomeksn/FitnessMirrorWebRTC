@@ -47,6 +47,8 @@ class WebRTCManager(
 
     private var isFrontCamera = true
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
+    private var frameCount = 0
+    private var scalingLoggedOnce = false
 
     /**
      * Initialize WebRTC components
@@ -172,46 +174,32 @@ class WebRTCManager(
      */
     fun injectFrame(image: ImageProxy) {
         try {
-            Log.d(TAG, "🔍 injectFrame called - width=${image.width}, height=${image.height}, format=${image.format}")
+            frameCount++
 
-            // Check API availability
-            Log.d(TAG, "VideoSource: $localVideoSource")
-            Log.d(TAG, "CapturerObserver accessible: ${try { localVideoSource?.capturerObserver != null } catch (e: Exception) { "ERROR: $e" }}")
+            // Log only every 100 frames to reduce overhead
+            if (frameCount % 100 == 1) {
+                Log.d(TAG, "📊 Frame #$frameCount - input: ${image.width}x${image.height}, target: ${VIDEO_WIDTH}x${VIDEO_HEIGHT}")
+            }
 
-            // Try to detect available buffer classes
-            val availableBuffers = detectAvailableBufferClasses()
-            Log.d(TAG, "Available buffer classes: $availableBuffers")
-
-            // Convert ImageProxy (YUV) to WebRTC VideoFrame
+            // Convert ImageProxy (YUV) to WebRTC VideoFrame (includes scaling)
             val videoFrame = imageProxyToVideoFrame(image)
 
             if (videoFrame != null) {
-                Log.d(TAG, "✅ VideoFrame created successfully")
                 // Feed frame to video source
                 localVideoSource?.capturerObserver?.onFrameCaptured(videoFrame)
-                Log.d(TAG, "✅ Frame injected to capturerObserver")
                 videoFrame.release()
-            } else {
-                Log.e(TAG, "❌ VideoFrame creation failed - returned null")
+            } else if (frameCount % 100 == 1) {
+                Log.e(TAG, "❌ VideoFrame creation failed")
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to inject frame", e)
-            e.printStackTrace()
         }
-    }
-
-    private fun detectAvailableBufferClasses(): String {
-        val classes = mutableListOf<String>()
-        try { JavaI420Buffer.allocate(1, 1); classes.add("JavaI420Buffer") } catch (e: Exception) { }
-        try { Class.forName("org.webrtc.I420Buffer"); classes.add("I420Buffer") } catch (e: Exception) { }
-        try { Class.forName("org.webrtc.NV21Buffer"); classes.add("NV21Buffer") } catch (e: Exception) { }
-        try { Class.forName("org.webrtc.NV12Buffer"); classes.add("NV12Buffer") } catch (e: Exception) { }
-        return if (classes.isEmpty()) "NONE FOUND" else classes.joinToString(", ")
     }
 
     /**
      * Convert CameraX ImageProxy (YUV) to WebRTC VideoFrame
      * Properly handles rowStride and pixelStride to avoid BufferOverflowException
+     * Scales to VIDEO_WIDTH x VIDEO_HEIGHT for optimal encoding performance
      */
     private fun imageProxyToVideoFrame(image: ImageProxy): VideoFrame? {
         try {
@@ -222,11 +210,7 @@ class WebRTCManager(
             val uPlane = image.planes[1]
             val vPlane = image.planes[2]
 
-            Log.d(TAG, "📊 Y plane: rowStride=${yPlane.rowStride}, pixelStride=${yPlane.pixelStride}, buffer=${yPlane.buffer.remaining()}")
-            Log.d(TAG, "📊 U plane: rowStride=${uPlane.rowStride}, pixelStride=${uPlane.pixelStride}, buffer=${uPlane.buffer.remaining()}")
-            Log.d(TAG, "📊 V plane: rowStride=${vPlane.rowStride}, pixelStride=${vPlane.pixelStride}, buffer=${vPlane.buffer.remaining()}")
-
-            // Create I420 buffer
+            // Create I420 buffer at original resolution
             val i420Buffer = JavaI420Buffer.allocate(width, height)
 
             // Copy Y plane (handle rowStride - may have padding)
@@ -306,9 +290,26 @@ class WebRTCManager(
                 }
             }
 
+            // Scale to target resolution for optimal encoding performance
+            // This reduces 1088x1088 -> 320x240, massively reducing CPU/bandwidth
+            val finalBuffer = if (width != VIDEO_WIDTH || height != VIDEO_HEIGHT) {
+                if (!scalingLoggedOnce) {
+                    Log.i(TAG, "📐 Scaling enabled: ${width}x${height} -> ${VIDEO_WIDTH}x${VIDEO_HEIGHT} (10x less pixels)")
+                    scalingLoggedOnce = true
+                }
+                val scaledBuffer = i420Buffer.cropAndScale(
+                    0, 0, width, height,  // Crop area (entire frame)
+                    VIDEO_WIDTH, VIDEO_HEIGHT  // Target size
+                )
+                i420Buffer.release()  // Release original buffer
+                scaledBuffer
+            } else {
+                i420Buffer
+            }
+
             // Create VideoFrame with timestamp
             val timestampNs = System.nanoTime()
-            return VideoFrame(i420Buffer, 0 /* rotation */, timestampNs)
+            return VideoFrame(finalBuffer, 0 /* rotation */, timestampNs)
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to convert ImageProxy to VideoFrame", e)
