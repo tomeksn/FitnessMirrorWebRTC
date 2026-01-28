@@ -219,8 +219,10 @@ class CameraManager(
                     imageAnalysis?.setAnalyzer(cameraExecutor) { image ->
                         if (isStreaming) {
                             processFrame(image)
+                            // processFrame already closes image in finally block (line 311)
+                        } else {
+                            image.close()  // Only close when not streaming
                         }
-                        image.close()
                     }
 
                     Log.d(TAG, "STREAMING mode: Binding Preview + ImageAnalysis (JPEG processing enabled)")
@@ -534,8 +536,10 @@ class CameraManager(
                             analysis.setAnalyzer(cameraExecutor) { image ->
                                 if (isStreaming) {
                                     processFrame(image)
+                                    // processFrame already closes image in finally block
+                                } else {
+                                    image.close()  // Only close when not streaming
                                 }
-                                image.close()
                             }
                         }
                 } else {
