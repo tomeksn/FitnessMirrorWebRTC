@@ -142,6 +142,53 @@ class WebRTCManager(
     }
 
     /**
+     * Filter AV1 codec from SDP to force VP9/H.264 usage
+     * AV1 has no hardware decoder on TV (only slow software decoder)
+     */
+    private fun filterAv1FromSdp(sdp: String): String {
+        val lines = sdp.split("\r\n").toMutableList()
+        val filteredLines = mutableListOf<String>()
+        var av1PayloadType: String? = null
+
+        // First pass: find AV1 payload type
+        for (line in lines) {
+            if (line.contains("a=rtpmap:") && line.contains("AV1/90000")) {
+                val match = Regex("a=rtpmap:(\\d+) AV1").find(line)
+                av1PayloadType = match?.groupValues?.get(1)
+                Log.d(TAG, "Found AV1 payload type to filter: $av1PayloadType")
+                break
+            }
+        }
+
+        if (av1PayloadType == null) {
+            Log.d(TAG, "No AV1 codec found in SDP, returning unchanged")
+            return sdp
+        }
+
+        // Second pass: filter out AV1 lines
+        for (line in lines) {
+            val skipLine = (
+                line.contains("a=rtpmap:$av1PayloadType ") ||
+                line.contains("a=rtcp-fb:$av1PayloadType ") ||
+                line.contains("a=fmtp:$av1PayloadType ")
+            )
+
+            if (!skipLine) {
+                if (line.startsWith("m=video") && av1PayloadType != null) {
+                    val filtered = line.replace(" $av1PayloadType", "")
+                    filteredLines.add(filtered)
+                } else {
+                    filteredLines.add(line)
+                }
+            }
+        }
+
+        val result = filteredLines.joinToString("\r\n")
+        Log.d(TAG, "SDP filtered - removed AV1 codec, forcing VP9/H.264")
+        return result
+    }
+
+    /**
      * Initialize video source for manual frame injection
      * Camera frames will be provided by CameraManager
      */
@@ -341,10 +388,13 @@ class WebRTCManager(
                     override fun onCreateSuccess(sdp: SessionDescription) {
                         Log.d(TAG, "Offer created successfully")
 
-                        // Filter VP8 from SDP - only for sending to TV, not for local description
-                        val filteredSdpString = filterVp8FromSdp(sdp.description)
+                        // Filter VP8 and AV1 from SDP - only for sending to TV, not for local description
+                        // VP8: less efficient than H.264
+                        // AV1: TV has only software decoder (very slow, causes high latency)
+                        val filteredVp8 = filterVp8FromSdp(sdp.description)
+                        val filteredSdpString = filterAv1FromSdp(filteredVp8)
                         val filteredSdp = SessionDescription(sdp.type, filteredSdpString)
-                        Log.d(TAG, "SDP filtered to prefer H.264 over VP8 (for TV)")
+                        Log.d(TAG, "SDP filtered - removed VP8 and AV1, forcing VP9/H.264 (for TV)")
 
                         // Set ORIGINAL SDP as local description (WebRTC needs all available codecs)
                         peerConnection?.setLocalDescription(object : SdpObserver {
