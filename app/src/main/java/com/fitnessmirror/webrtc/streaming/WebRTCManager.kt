@@ -437,28 +437,19 @@ class WebRTCManager(
     private fun createPeerConnection() {
         Log.d(TAG, "Creating peer connection")
 
-        // ICE servers configuration (STUN + TURN for relay when direct connection fails)
+        // LAN-only ICE servers - no TURN needed for local network streaming
+        // TURN servers removed - they cause connection instability on LAN
+        // by replacing working direct host candidates with slow relay paths
         val iceServers = listOf(
-            IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
-            // TURN server for relay when direct connection fails
-            IceServer.builder("turn:openrelay.metered.ca:80")
-                .setUsername("openrelayproject")
-                .setPassword("openrelayproject")
-                .createIceServer(),
-            IceServer.builder("turn:openrelay.metered.ca:443")
-                .setUsername("openrelayproject")
-                .setPassword("openrelayproject")
-                .createIceServer(),
-            IceServer.builder("turn:openrelay.metered.ca:443?transport=tcp")
-                .setUsername("openrelayproject")
-                .setPassword("openrelayproject")
-                .createIceServer()
+            IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
         )
 
         // RTCConfiguration
         val rtcConfig = RTCConfiguration(iceServers).apply {
             sdpSemantics = SdpSemantics.UNIFIED_PLAN
-            continualGatheringPolicy = ContinualGatheringPolicy.GATHER_CONTINUALLY
+            // GATHER_ONCE: Stop gathering after initial candidates found
+            // Prevents late TURN candidates from disrupting working connection
+            continualGatheringPolicy = ContinualGatheringPolicy.GATHER_ONCE
         }
 
         // Create peer connection
