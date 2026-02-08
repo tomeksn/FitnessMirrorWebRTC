@@ -69,8 +69,8 @@ class WebRTCManager(
             val options = PeerConnectionFactory.Options()
             val encoderFactory = DefaultVideoEncoderFactory(
                 EglBase.create().eglBaseContext,
-                true,  // Enable Intel VP8 encoder
-                true   // Enable H264 high profile
+                true,   // Enable Intel VP8 encoder
+                false   // Disable H264 High Profile - use Constrained Baseline for TV compatibility
             )
             val decoderFactory = DefaultVideoDecoderFactory(EglBase.create().eglBaseContext)
 
@@ -185,6 +185,53 @@ class WebRTCManager(
 
         val result = filteredLines.joinToString("\r\n")
         Log.d(TAG, "SDP filtered - removed AV1 codec, forcing VP9/H.264")
+        return result
+    }
+
+    /**
+     * Filter VP9 codec from SDP to force H.264 Baseline only
+     * VP9 hardware decoding on budget Realtek TVs is often buggy or software-only
+     */
+    private fun filterVp9FromSdp(sdp: String): String {
+        val lines = sdp.split("\r\n").toMutableList()
+        val filteredLines = mutableListOf<String>()
+        var vp9PayloadType: String? = null
+
+        // First pass: find VP9 payload type
+        for (line in lines) {
+            if (line.contains("a=rtpmap:") && line.contains("VP9/90000")) {
+                val match = Regex("a=rtpmap:(\\d+) VP9").find(line)
+                vp9PayloadType = match?.groupValues?.get(1)
+                Log.d(TAG, "Found VP9 payload type to filter: $vp9PayloadType")
+                break
+            }
+        }
+
+        if (vp9PayloadType == null) {
+            Log.d(TAG, "No VP9 codec found in SDP, returning unchanged")
+            return sdp
+        }
+
+        // Second pass: filter out VP9 lines
+        for (line in lines) {
+            val skipLine = (
+                line.contains("a=rtpmap:$vp9PayloadType ") ||
+                line.contains("a=rtcp-fb:$vp9PayloadType ") ||
+                line.contains("a=fmtp:$vp9PayloadType ")
+            )
+
+            if (!skipLine) {
+                if (line.startsWith("m=video") && vp9PayloadType != null) {
+                    val filtered = line.replace(" $vp9PayloadType", "")
+                    filteredLines.add(filtered)
+                } else {
+                    filteredLines.add(line)
+                }
+            }
+        }
+
+        val result = filteredLines.joinToString("\r\n")
+        Log.d(TAG, "SDP filtered - removed VP9 codec, forcing H.264 Baseline only")
         return result
     }
 
@@ -392,9 +439,10 @@ class WebRTCManager(
                         // VP8: less efficient than H.264
                         // AV1: TV has only software decoder (very slow, causes high latency)
                         val filteredVp8 = filterVp8FromSdp(sdp.description)
-                        val filteredSdpString = filterAv1FromSdp(filteredVp8)
+                        val filteredAv1 = filterAv1FromSdp(filteredVp8)
+                        val filteredSdpString = filterVp9FromSdp(filteredAv1)
                         val filteredSdp = SessionDescription(sdp.type, filteredSdpString)
-                        Log.d(TAG, "SDP filtered - removed VP8 and AV1, forcing VP9/H.264 (for TV)")
+                        Log.d(TAG, "SDP filtered - removed VP8, AV1, VP9 - forcing H.264 Baseline only (for TV)")
 
                         // Set ORIGINAL SDP as local description (WebRTC needs all available codecs)
                         peerConnection?.setLocalDescription(object : SdpObserver {

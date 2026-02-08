@@ -1171,17 +1171,16 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
                         if (message.type === 'SDP') {
                             console.log('📨 Received SDP: ' + message.sdpType);
 
-                            // Filter VP8 from SDP to force H.264 for better TV compatibility
-                            var filteredSdpString = filterVp8FromSdp(message.sdp);
+                            // SDP already filtered by server (VP8, AV1, VP9 removed - H.264 Baseline only)
                             var sdp = new RTCSessionDescription({
                                 type: message.sdpType,
-                                sdp: filteredSdpString
+                                sdp: message.sdp
                             });
 
                             if (message.sdpType === 'offer') {
                                 // Received offer from Android - create answer
-                                console.log('📥 Received offer from server - creating answer (VP8 filtered)');
-                                self.updateStatus('Negotiating WebRTC (H.264)...', 'connecting');
+                                console.log('📥 Received offer from server - creating answer (H.264 Baseline only)');
+                                self.updateStatus('Negotiating WebRTC (H.264 Baseline)...', 'connecting');
                                 self.pc.setRemoteDescription(sdp).then(function() {
                                     return self.createAnswer();
                                 }).catch(function(error) {
