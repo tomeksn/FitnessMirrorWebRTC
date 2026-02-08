@@ -28,8 +28,8 @@ class WebRTCManager(
 ) {
     companion object {
         private const val TAG = "WebRTCManager"
-        private const val VIDEO_WIDTH = 320
-        private const val VIDEO_HEIGHT = 240
+        private const val VIDEO_WIDTH = 240
+        private const val VIDEO_HEIGHT = 180
         private const val VIDEO_FPS = 30
     }
 

@@ -72,8 +72,8 @@ class CameraManager(
         private const val TARGET_HEIGHT = 720  // 16:9 aspect ratio for modern displays
 
         // 📡 TV STREAMING OPTIMIZATION: Low resolution for fast network transmission (match CastApp)
-        private const val STREAMING_WIDTH = 320   // Optimized for TV streaming - 16x fewer pixels
-        private const val STREAMING_HEIGHT = 240  // 320x240 = fast encoding + small network packets
+        private const val STREAMING_WIDTH = 240   // Reduced for Realtek decoder - 44% fewer pixels
+        private const val STREAMING_HEIGHT = 180  // 240x180 = less decoder load + fewer buffer failures
 
         // 📡 STEP 2: Optimized for low latency streaming (<80ms target)
         private const val JPEG_QUALITY = 35    // Lower quality = faster encode/decode (saves 15-25ms)
@@ -682,7 +682,7 @@ class CameraManager(
     fun startBackgroundStreaming() {
         Log.d(TAG, "Starting background streaming in headless mode")
         isHeadlessMode = true
-        isBackgroundMode = true  // Slower frame rate for background
+        isBackgroundMode = false  // Streaming service is foreground, use full 30fps
         startStreaming()
         Log.d(TAG, "Background streaming started (headless mode)")
     }
