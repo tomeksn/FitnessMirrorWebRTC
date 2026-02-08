@@ -134,39 +134,21 @@ class StreamingServer(
         return StreamingWebSocket(handshake, this)
     }
 
-    fun startServer() {
-        try {
+    fun startServer(): Boolean {
+        return try {
             Log.d(TAG, "Starting server on port $port...")
-            Log.d(TAG, "Socket timeout: ${SOCKET_TIMEOUT_MS}ms")
-            Log.d(TAG, "Ping interval: ${PING_INTERVAL_MS}ms")
 
-            // Explicitly bind to all interfaces for TV compatibility
             start(SOCKET_TIMEOUT_MS, false)
             isRunning = true
 
-            Log.i(TAG, "✅ Streaming server started successfully!")
-            Log.i(TAG, "📡 Server listening on: 0.0.0.0:$port (all interfaces)")
-            Log.i(TAG, "🌐 WebSocket endpoint: $WEBSOCKET_PATH")
-            Log.i(TAG, "🔄 SSE endpoint: /stream-sse")
-            Log.i(TAG, "🔧 Fallback client: /fallback")
-            Log.i(TAG, "🧪 Test page: /test")
-            Log.i(TAG, "🔍 Debug page: /debug")
-            Log.i(TAG, "⏱️ Socket timeout: ${SOCKET_TIMEOUT_MS}ms")
-            Log.i(TAG, "💓 Ping interval: ${PING_INTERVAL_MS}ms")
+            Log.i(TAG, "Streaming server started on 0.0.0.0:$port (WebSocket: $WEBSOCKET_PATH)")
 
             callback.onServerStarted(port)
+            true
         } catch (e: IOException) {
-            Log.e(TAG, "❌ Failed to start server on port $port", e)
-            Log.e(TAG, "Error details: ${e.message}")
-            Log.e(TAG, "Error cause: ${e.cause}")
-
-            // Try alternative ports if the main port fails
-            if (port == 8080) {
-                Log.i(TAG, "💡 Tip: If port 8080 is busy, try using a different port in MainActivity")
-                Log.i(TAG, "💡 Alternative ports for TV: 8000, 3000, 8888")
-            }
-
+            Log.e(TAG, "Failed to start server on port $port: ${e.message}", e)
             callback.onServerError("Failed to start server: ${e.message}")
+            false
         }
     }
 

@@ -564,31 +564,32 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
     }
 
     override fun onCameraFullyInitialized() {
-        // FIX #3/#4: Camera is ready - NOW start the server
-        Log.d(TAG, "✅ Camera fully initialized - NOW starting server")
+        Log.d(TAG, "Camera fully initialized - starting server")
         isCameraReady = true
 
         try {
-            // Now start the server (camera is ready for frames)
-            streamingServer.startServer()
+            // Start the server - check if it actually succeeded
+            val serverStarted = streamingServer.startServer()
+            if (!serverStarted) {
+                Log.e(TAG, "Server failed to start - NOT starting discovery broadcaster")
+                stopSelf()
+                return
+            }
 
-            // Start UDP broadcast for TV discovery
+            // Only start UDP broadcast after server is confirmed running
             discoveryBroadcaster = DiscoveryBroadcaster(this, SERVER_PORT)
             discoveryBroadcaster?.start(Build.MODEL)
-            Log.d(TAG, "📡 Discovery broadcast started for TV auto-discovery")
+            Log.d(TAG, "Discovery broadcast started for TV auto-discovery")
 
-            // Update notification
             updateNotification("Streaming active - $serverAddress")
-
-            // Notify UI with complete state
             serviceCallback?.onStreamingStateChanged(isStreaming, hasConnectedClient, serverAddress)
 
-            Log.d(TAG, "✅ Full stack ready: Camera → Server → Discovery → Ready for TV")
+            Log.d(TAG, "Full stack ready: Camera -> Server -> Discovery -> Ready for TV")
 
-            // NEW: If client already connected, create WebRTC offer now
+            // If client already connected, create WebRTC offer now
             if (hasPendingWebRTCOffer && hasConnectedClient) {
                 webRTCManager?.let {
-                    Log.d(TAG, "📡 Camera ready & client waiting - creating WebRTC offer now")
+                    Log.d(TAG, "Camera ready & client waiting - creating WebRTC offer now")
                     it.createOffer()
                     hasPendingWebRTCOffer = false
                 }
