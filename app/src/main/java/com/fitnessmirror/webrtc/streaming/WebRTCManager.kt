@@ -30,7 +30,6 @@ class WebRTCManager(
         private const val TAG = "WebRTCManager"
         private const val VIDEO_WIDTH = 240
         private const val VIDEO_HEIGHT = 180
-        private const val VIDEO_FPS = 30
     }
 
     interface WebRTCCallback {
@@ -44,6 +43,8 @@ class WebRTCManager(
     private var peerConnection: PeerConnection? = null
     private var videoTrack: VideoTrack? = null
     private var localVideoSource: VideoSource? = null
+    private var videoRtpSender: RtpSender? = null  // Stored for adaptive quality control
+    private var currentVideoFps = 30  // Mutable for adaptive quality (was const VIDEO_FPS)
 
     private var isFrontCamera = true
     private val coroutineScope = CoroutineScope(Dispatchers.Main)
@@ -556,9 +557,9 @@ class WebRTCManager(
             }
         )
 
-        // Add video track to peer connection
+        // Add video track to peer connection (store sender for adaptive quality control)
         videoTrack?.let { track ->
-            peerConnection?.addTrack(track, listOf("stream_id"))
+            videoRtpSender = peerConnection?.addTrack(track, listOf("stream_id"))
             Log.d(TAG, "Video track added to peer connection")
         }
     }
@@ -600,6 +601,26 @@ class WebRTCManager(
      * Check if front camera is currently active
      */
     fun isFrontCamera(): Boolean = isFrontCamera
+
+    /**
+     * Set maximum framerate and bitrate for adaptive quality control.
+     * Called by StreamingService when TV reports stream stalls.
+     */
+    fun setMaxFramerate(fps: Int) {
+        currentVideoFps = fps
+        videoRtpSender?.parameters?.let { params ->
+            params.encodings.forEach { encoding ->
+                encoding.maxFramerate = fps
+                encoding.maxBitrateBps = when {
+                    fps >= 25 -> 500_000   // 500kbps for 30fps
+                    fps >= 18 -> 350_000   // 350kbps for 20fps
+                    else      -> 250_000   // 250kbps for 15fps
+                }
+            }
+            videoRtpSender?.parameters = params
+            Log.d(TAG, "WebRTC encoder limited to ${fps}fps")
+        }
+    }
 
     /**
      * Cleanup and release all WebRTC resources

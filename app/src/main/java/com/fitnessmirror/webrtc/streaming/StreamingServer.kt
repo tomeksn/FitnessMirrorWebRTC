@@ -40,6 +40,8 @@ class StreamingServer(
         fun onWebRTCOffer(sdp: SessionDescription)
         fun onWebRTCAnswer(sdp: SessionDescription)
         fun onWebRTCIceCandidate(candidate: IceCandidate)
+        // Adaptive quality control: TV requests FPS changes
+        fun onQualityControl(action: String)
     }
 
     private var currentWebSocket: StreamingWebSocket? = null
@@ -1889,6 +1891,12 @@ Current Time: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.ut
                             candidate
                         )
                         server.callback.onWebRTCIceCandidate(iceCandidate)
+                    }
+
+                    "QUALITY_CONTROL" -> {
+                        val action = json.getString("action")
+                        Log.i(TAG, "QUALITY_CONTROL received: $action")
+                        server.callback.onQualityControl(action)
                     }
 
                     else -> {

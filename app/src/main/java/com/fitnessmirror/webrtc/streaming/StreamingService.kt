@@ -82,6 +82,12 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
     private var useWebRTC: Boolean = true  // Try WebRTC first, fallback to WebSocket if fails
     private var discoveryBroadcaster: DiscoveryBroadcaster? = null  // UDP broadcast for TV discovery
 
+    // Adaptive quality levels
+    private enum class QualityLevel(val fps: Int) {
+        LOW(15), MEDIUM(20), HIGH(30)
+    }
+    private var currentQualityLevel = QualityLevel.HIGH
+
     // Streaming state
     private var isStreaming = false
     private var hasConnectedClient = false
@@ -656,6 +662,31 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
         Log.d(TAG, "Received ICE candidate from TV client")
         // Add ICE candidate to establish connection
         webRTCManager?.addIceCandidate(candidate)
+    }
+
+    override fun onQualityControl(action: String) {
+        val newLevel = when (action) {
+            "decrease" -> when (currentQualityLevel) {
+                QualityLevel.HIGH   -> QualityLevel.MEDIUM
+                QualityLevel.MEDIUM -> QualityLevel.LOW
+                QualityLevel.LOW    -> QualityLevel.LOW  // already at min
+            }
+            "increase" -> when (currentQualityLevel) {
+                QualityLevel.LOW    -> QualityLevel.MEDIUM
+                QualityLevel.MEDIUM -> QualityLevel.HIGH
+                QualityLevel.HIGH   -> QualityLevel.HIGH  // already at max
+            }
+            else -> currentQualityLevel
+        }
+
+        if (newLevel != currentQualityLevel) {
+            currentQualityLevel = newLevel
+            Log.i(TAG, "Quality level: $action → ${newLevel.name} (${newLevel.fps}fps)")
+            cameraManager.setFrameRateFps(newLevel.fps)
+            webRTCManager?.setMaxFramerate(newLevel.fps)
+        } else {
+            Log.d(TAG, "Quality already at ${currentQualityLevel.name}, no change")
+        }
     }
 
     // WebRTCManager.WebRTCCallback implementation

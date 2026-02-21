@@ -77,7 +77,7 @@ class CameraManager(
 
         // 📡 STEP 2: Optimized for low latency streaming (<80ms target)
         private const val JPEG_QUALITY = 35    // Lower quality = faster encode/decode (saves 15-25ms)
-        private const val FRAME_RATE_MS = 33L   // 30 FPS (33ms = 1000ms/30fps) for smooth real-time motion (saves 67ms)
+        private const val DEFAULT_FRAME_RATE_MS = 33L   // 30 FPS default (mutable via setFrameRateFps)
     }
 
     private var cameraProvider: ProcessCameraProvider? = null
@@ -89,6 +89,9 @@ class CameraManager(
 
     @Volatile private var isStreaming = false
     private var currentCameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA  // Match NativeCameraView default for consistent behavior
+
+    // Adaptive quality: mutable frame rate (default 30fps, reduced on TV stall signal)
+    private var currentFrameRateMs = DEFAULT_FRAME_RATE_MS
 
     // Current camera mode for performance optimization
     private var currentMode: CameraMode = CameraMode.PREVIEW_ONLY
@@ -102,7 +105,7 @@ class CameraManager(
 
     // Background processing capability
     private var isBackgroundMode = false
-    private var backgroundFrameInterval = FRAME_RATE_MS * 2 // Slower rate when in background (7.5fps)
+    private var backgroundFrameInterval = DEFAULT_FRAME_RATE_MS * 2 // Slower rate when in background (7.5fps)
 
     // Headless mode for background service streaming
     private var isHeadlessMode = false
@@ -287,11 +290,16 @@ class CameraManager(
         }
     }
 
+    fun setFrameRateFps(fps: Int) {
+        currentFrameRateMs = (1000L / fps).coerceIn(33L, 200L)
+        Log.d(TAG, "Frame rate set to ${fps}fps (${currentFrameRateMs}ms interval)")
+    }
+
     private fun processFrame(image: ImageProxy) {
         val currentTime = System.currentTimeMillis()
 
         // Simple frame rate limiting like CastApp
-        val frameInterval = if (isBackgroundMode) backgroundFrameInterval else FRAME_RATE_MS
+        val frameInterval = if (isBackgroundMode) backgroundFrameInterval else currentFrameRateMs
         if (currentTime - lastFrameTime < frameInterval) {
             image.close()  // Important: close unused frames
             return
@@ -734,8 +742,8 @@ class CameraManager(
                 // If we haven't received a new frame recently but have a buffered frame, repeat it
                 if (lastFrameData != null &&
                     frameBufferTime > 0 &&
-                    currentTime - frameBufferTime > FRAME_RATE_MS &&
-                    currentTime - frameBufferTime < FRAME_RATE_MS * 2) { // Don't repeat too old frames
+                    currentTime - frameBufferTime > currentFrameRateMs &&
+                    currentTime - frameBufferTime < currentFrameRateMs * 2) { // Don't repeat too old frames
 
                     // Send the last frame again for smoother display
                     frameCallback?.invoke(lastFrameData!!)
