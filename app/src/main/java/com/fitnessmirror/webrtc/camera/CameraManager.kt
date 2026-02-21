@@ -72,8 +72,8 @@ class CameraManager(
         private const val TARGET_HEIGHT = 720  // 16:9 aspect ratio for modern displays
 
         // 📡 TV STREAMING OPTIMIZATION: Low resolution for fast network transmission (match CastApp)
-        private const val STREAMING_WIDTH = 240   // Reduced for Realtek decoder - 44% fewer pixels
-        private const val STREAMING_HEIGHT = 180  // 240x180 = less decoder load + fewer buffer failures
+        private const val STREAMING_WIDTH = 160   // 160x120 = 2.25x fewer pixels than 240x180 → faster decode
+        private const val STREAMING_HEIGHT = 120  // Less CPU for YouTube to compete with
 
         // 📡 STEP 2: Optimized for low latency streaming (<80ms target)
         private const val JPEG_QUALITY = 35    // Lower quality = faster encode/decode (saves 15-25ms)

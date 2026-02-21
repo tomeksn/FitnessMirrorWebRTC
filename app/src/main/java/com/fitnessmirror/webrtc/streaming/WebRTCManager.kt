@@ -28,8 +28,8 @@ class WebRTCManager(
 ) {
     companion object {
         private const val TAG = "WebRTCManager"
-        private const val VIDEO_WIDTH = 240
-        private const val VIDEO_HEIGHT = 180
+        private const val VIDEO_WIDTH = 160
+        private const val VIDEO_HEIGHT = 120
     }
 
     interface WebRTCCallback {
@@ -561,6 +561,8 @@ class WebRTCManager(
         videoTrack?.let { track ->
             videoRtpSender = peerConnection?.addTrack(track, listOf("stream_id"))
             Log.d(TAG, "Video track added to peer connection")
+            // Apply initial conservative constraints immediately to prevent 30fps burst on connect
+            applyEncoderConstraints(fps = 15, bitrateBps = 200_000)
         }
     }
 
@@ -603,23 +605,33 @@ class WebRTCManager(
     fun isFrontCamera(): Boolean = isFrontCamera
 
     /**
+     * Apply encoder constraints (fps + bitrate cap) via RTP sender parameters.
+     * Called on initial connection and on adaptive quality changes.
+     */
+    private fun applyEncoderConstraints(fps: Int, bitrateBps: Int) {
+        videoRtpSender?.parameters?.let { params ->
+            params.encodings.forEach { encoding ->
+                encoding.maxFramerate = fps
+                encoding.maxBitrateBps = bitrateBps
+            }
+            videoRtpSender?.parameters = params
+            Log.d(TAG, "Encoder constraints: ${fps}fps, ${bitrateBps / 1000}kbps")
+        }
+    }
+
+    /**
      * Set maximum framerate and bitrate for adaptive quality control.
      * Called by StreamingService when TV reports stream stalls.
      */
     fun setMaxFramerate(fps: Int) {
         currentVideoFps = fps
-        videoRtpSender?.parameters?.let { params ->
-            params.encodings.forEach { encoding ->
-                encoding.maxFramerate = fps
-                encoding.maxBitrateBps = when {
-                    fps >= 25 -> 500_000   // 500kbps for 30fps
-                    fps >= 18 -> 350_000   // 350kbps for 20fps
-                    else      -> 250_000   // 250kbps for 15fps
-                }
-            }
-            videoRtpSender?.parameters = params
-            Log.d(TAG, "WebRTC encoder limited to ${fps}fps")
+        val bitrateBps = when {
+            fps >= 25 -> 500_000   // 500kbps for 30fps
+            fps >= 18 -> 350_000   // 350kbps for 20fps
+            fps >= 12 -> 200_000   // 200kbps for 15fps
+            else      -> 100_000   // 100kbps for 8fps (VERY_LOW)
         }
+        applyEncoderConstraints(fps, bitrateBps)
     }
 
     /**

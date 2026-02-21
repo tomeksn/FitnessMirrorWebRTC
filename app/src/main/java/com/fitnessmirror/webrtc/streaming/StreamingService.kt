@@ -84,9 +84,9 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
 
     // Adaptive quality levels
     private enum class QualityLevel(val fps: Int) {
-        LOW(15), MEDIUM(20), HIGH(30)
+        VERY_LOW(8), LOW(15), MEDIUM(20), HIGH(30)
     }
-    private var currentQualityLevel = QualityLevel.HIGH
+    private var currentQualityLevel = QualityLevel.LOW  // Start conservatively, increase if TV handles it
 
     // Streaming state
     private var isStreaming = false
@@ -667,14 +667,16 @@ class StreamingService : Service(), LifecycleOwner, CameraManager.CameraCallback
     override fun onQualityControl(action: String) {
         val newLevel = when (action) {
             "decrease" -> when (currentQualityLevel) {
-                QualityLevel.HIGH   -> QualityLevel.MEDIUM
-                QualityLevel.MEDIUM -> QualityLevel.LOW
-                QualityLevel.LOW    -> QualityLevel.LOW  // already at min
+                QualityLevel.HIGH      -> QualityLevel.MEDIUM
+                QualityLevel.MEDIUM    -> QualityLevel.LOW
+                QualityLevel.LOW       -> QualityLevel.VERY_LOW
+                QualityLevel.VERY_LOW  -> QualityLevel.VERY_LOW  // already at min
             }
             "increase" -> when (currentQualityLevel) {
-                QualityLevel.LOW    -> QualityLevel.MEDIUM
-                QualityLevel.MEDIUM -> QualityLevel.HIGH
-                QualityLevel.HIGH   -> QualityLevel.HIGH  // already at max
+                QualityLevel.VERY_LOW  -> QualityLevel.LOW
+                QualityLevel.LOW       -> QualityLevel.MEDIUM
+                QualityLevel.MEDIUM    -> QualityLevel.HIGH
+                QualityLevel.HIGH      -> QualityLevel.HIGH  // already at max
             }
             else -> currentQualityLevel
         }
