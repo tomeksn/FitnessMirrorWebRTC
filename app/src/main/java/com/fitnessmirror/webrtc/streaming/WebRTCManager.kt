@@ -610,12 +610,13 @@ class WebRTCManager(
      */
     private fun applyEncoderConstraints(fps: Int, bitrateBps: Int) {
         videoRtpSender?.parameters?.let { params ->
+            params.degradationPreference = RtpParameters.DegradationPreference.MAINTAIN_FRAMERATE
             params.encodings.forEach { encoding ->
                 encoding.maxFramerate = fps
                 encoding.maxBitrateBps = bitrateBps
             }
             videoRtpSender?.parameters = params
-            Log.d(TAG, "Encoder constraints: ${fps}fps, ${bitrateBps / 1000}kbps")
+            Log.d(TAG, "Encoder constraints: ${fps}fps, ${bitrateBps / 1000}kbps, MAINTAIN_FRAMERATE")
         }
     }
 
