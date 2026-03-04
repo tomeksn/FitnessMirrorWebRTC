@@ -94,6 +94,57 @@ class WebRTCManager(
     }
 
     /**
+     * Filter H.264 codec from SDP to force VP8 usage
+     * VP8 has reliable software decoder on TVs (Realtek HW decoder incompatible with DynamicANWBuffer)
+     */
+    private fun filterH264FromSdp(sdp: String): String {
+        val lines = sdp.split("\r\n").toMutableList()
+        val filteredLines = mutableListOf<String>()
+        val h264PayloadTypes = mutableListOf<String>()
+
+        // First pass: find all H264 payload types
+        for (line in lines) {
+            if (line.contains("a=rtpmap:") && line.lowercase().contains("h264/90000")) {
+                val match = Regex("a=rtpmap:(\\d+) [Hh]264").find(line)
+                match?.groupValues?.get(1)?.let {
+                    h264PayloadTypes.add(it)
+                    Log.d(TAG, "Found H264 payload type: $it")
+                }
+            }
+        }
+
+        if (h264PayloadTypes.isEmpty()) {
+            Log.d(TAG, "No H264 codec found in SDP, returning unchanged")
+            return sdp
+        }
+
+        // Second pass: filter out H264 lines
+        for (line in lines) {
+            val skipLine = h264PayloadTypes.any { pt ->
+                line.contains("a=rtpmap:$pt ") ||
+                line.contains("a=rtcp-fb:$pt ") ||
+                line.contains("a=fmtp:$pt ")
+            }
+
+            if (!skipLine) {
+                if (line.startsWith("m=video")) {
+                    var filtered = line
+                    for (pt in h264PayloadTypes) {
+                        filtered = filtered.replace(" $pt", "")
+                    }
+                    filteredLines.add(filtered)
+                } else {
+                    filteredLines.add(line)
+                }
+            }
+        }
+
+        val result = filteredLines.joinToString("\r\n")
+        Log.d(TAG, "SDP filtered - removed H264 codec, forcing VP8")
+        return result
+    }
+
+    /**
      * Filter VP8 codec from SDP to force H.264 usage
      * H.264 has better hardware support on TVs
      */
@@ -436,14 +487,15 @@ class WebRTCManager(
                     override fun onCreateSuccess(sdp: SessionDescription) {
                         Log.d(TAG, "Offer created successfully")
 
-                        // Filter VP8 and AV1 from SDP - only for sending to TV, not for local description
-                        // VP8: less efficient than H.264
+                        // Filter H.264, AV1, VP9 from SDP - only VP8 remains for TV
+                        // H.264: Realtek HW decoder incompatible with DynamicANWBuffer → stream freeze after 2 frames
                         // AV1: TV has only software decoder (very slow, causes high latency)
-                        val filteredVp8 = filterVp8FromSdp(sdp.description)
-                        val filteredAv1 = filterAv1FromSdp(filteredVp8)
+                        // VP9: buggy on Realtek hardware
+                        val filteredH264 = filterH264FromSdp(sdp.description)
+                        val filteredAv1 = filterAv1FromSdp(filteredH264)
                         val filteredSdpString = filterVp9FromSdp(filteredAv1)
                         val filteredSdp = SessionDescription(sdp.type, filteredSdpString)
-                        Log.d(TAG, "SDP filtered - removed VP8, AV1, VP9 - forcing H.264 Baseline only (for TV)")
+                        Log.d(TAG, "SDP filtered - removed H264, AV1, VP9 - forcing VP8 only (for TV Realtek compatibility)")
 
                         // Set ORIGINAL SDP as local description (WebRTC needs all available codecs)
                         peerConnection?.setLocalDescription(object : SdpObserver {
